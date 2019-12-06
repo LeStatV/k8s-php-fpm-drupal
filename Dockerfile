@@ -7,9 +7,6 @@ FROM php:${PHP_IMAGE_VERSION}-fpm-alpine
 LABEL maintainer="amazee.io"
 ENV LAGOON=php
 
-ARG LAGOON_VERSION
-ENV LAGOON_VERSION=$LAGOON_VERSION
-
 # Copy commons files
 COPY --from=commons /lagoon /lagoon
 COPY --from=commons /bin/fix-permissions /bin/ep /bin/docker-sleep /bin/
@@ -29,7 +26,7 @@ ENV TMPDIR=/tmp \
     DRUSH_LAUNCHER_VERSION=0.6.0
 
 COPY check_fcgi /usr/sbin/
-COPY entrypoints/70-php-config.sh entrypoints/60-php-xdebug.sh entrypoints/50-ssmtp.sh entrypoints/71-php-newrelic.sh /lagoon/entrypoints/
+COPY entrypoints/70-php-config.sh entrypoints/50-ssmtp.sh entrypoints/71-php-newrelic.sh /lagoon/entrypoints/
 
 COPY php.ini /usr/local/etc/php/
 COPY 00-lagoon-php.ini.tpl /usr/local/etc/php/conf.d/
@@ -38,32 +35,6 @@ COPY ssmtp.conf /etc/ssmtp/ssmtp.conf
 
 # Defining Versions - https://docs.newrelic.com/docs/release-notes/agent-release-notes/php-release-notes/ / https://docs.newrelic.com/docs/agents/php-agent/getting-started/php-agent-compatibility-requirements
 ENV NEWRELIC_VERSION=9.3.0.248
-
-# Backwards-compatibility for projects using an older location.
-RUN mkdir -p /var/www/html && ln -s /var/www/html /app
-
-# Add gdpr-dump globally.
-RUN apk add composer; \
-     mkdir -p ~/.composer; \
-     echo '{"minimum-stability": "dev"}' > ~/.composer/composer.json; \
-     composer global require --prefer-dist machbarmacher/gdpr-dump:dev-master; \
-     apk del composer
-
-RUN set -ex; \
-    # Install mysql client
-    apk add mysql-client; \
-    # Install GNU version of utilities
-    apk add findutils coreutils; \
-    # Install Drush launcher
-    curl -OL https://github.com/drush-ops/drush-launcher/releases/download/${DRUSH_LAUNCHER_VERSION}/drush.phar; \
-    chmod +x drush.phar; \
-    mv drush.phar /usr/local/bin/drush; \
-    \
-    # Create directory for shared files
-    mkdir -p -m +w /app/web/sites/default/files; \
-    mkdir -p -m +w /app/private; \
-    mkdir -p -m +w /app/reference-data; \
-    chown -R www-data:www-data /app
 
 RUN apk add --no-cache fcgi \
         ssmtp \
@@ -117,8 +88,23 @@ RUN apk add --no-cache fcgi \
     && mkdir -p /app \
     && fix-permissions /usr/local/etc/ \
     && fix-permissions /app \
-    && fix-permissions /etc/ssmtp/ssmtp.conf
-
+    && fix-permissions /etc/ssmtp/ssmtp.conf \
+    # Backwards-compatibility for projects using an older location.
+    && mkdir -p /var/www/html && ln -s /var/www/html /app \
+    && set -ex \
+    # Install mysql client
+    && apk add mysql-client \
+    # Install GNU version of utilities
+    && apk add findutils coreutils \
+    # Install Drush launcher
+    && curl -OL https://github.com/drush-ops/drush-launcher/releases/download/${DRUSH_LAUNCHER_VERSION}/drush.phar \
+    && chmod +x drush.phar \
+    && mv drush.phar /usr/local/bin/drush \
+    # Create directory for shared files
+    && mkdir -p -m +w /app/web/sites/default/files \
+    && mkdir -p -m +w /app/private \
+    && mkdir -p -m +w /app/reference-data \
+    && chown -R www-data:www-data /app;
 
 # Add composer executables to our path.
 ENV PATH="/app/vendor/bin:/home/.composer/vendor/bin:${PATH}"
